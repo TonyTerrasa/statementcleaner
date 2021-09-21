@@ -3,6 +3,18 @@ Small Python script that helps me clean csv downloads from my bank to the format
 
 The two banks I'm currently using and Bank of America and Santander (Spain). This script takes in the a csv exported from either of these two banks and transforms it into a format which is conveient for my own personal purchase log in my budget
 
+# Usage
+```
+usage: cleaner.py [-h] -file FILE [-output OUTPUT] [-type {bofa,santander}]
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -file FILE, -f FILE   location of the input file
+  -output OUTPUT, -o OUTPUT
+                        location of the output file
+  -type {bofa,santander}, -t {bofa,santander}
+                        type of bankstatement
+```
 
 # Specifications 
 
