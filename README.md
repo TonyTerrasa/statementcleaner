@@ -54,7 +54,7 @@ and returns pandas dataframe
 FECHA OPERACIÓN -> Date 
 CONCEPTO -> Name
 [Add] Category -> "" for all 
-[Add] Unit -> "Euro" for all 
+[Add] Unit -> "EUR" for all 
 IMPORTE EUR --> Amount [convert to positive]
 ```
 
