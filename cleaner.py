@@ -1,10 +1,75 @@
 import argparse
-from typing import List
 import pandas as pd
-from pandas.core.frame import DataFrame
+from subprocess import run
 
-def parse_santader(filename: str) -> pd.DataFrame:
-    return pd.DataFrame()
+
+def convert_to_csv(filename: str) -> str:
+
+    # create new filename by taking the whole filename 
+    # except for the extension and changing the extension 
+    # to csv
+    new_filename = filename.split('.')[:-1] + [".csv"]
+    new_filename = "".join(new_filename)
+
+    # use subprocess to convert file
+    run(f"ssconvert {filename} {new_filename}")
+    
+    # return new file name
+    return new_filename
+
+def parse_santader_es(filename: str) -> pd.DataFrame:
+    """
+    Reads statement from the Spanish version of the Santander web 
+    page exported as "Exportar Excel"
+
+    Output columns of this format are: 
+    FECHA OPERACIÓN,CONCEPTO,IMPORTE EUR
+
+    Function performs the following transformation of header names 
+    and returns pandas dataframe
+    FECHA OPERACIÓN -> Date 
+    CONCEPTO -> Name
+    [Add] Category -> "" for all 
+    [Add] Unit -> "Euro" for all 
+    IMPORTE EUR --> Amount [Convert to positive}
+
+    Finally, remove any deposits from the record
+    """
+    if ".csv" not in filename:
+        filename = convert_to_csv(filename)
+
+    # 7 lines until the headers of the table in this
+    # file type
+    df = pd.read_csv(filename, header=7)
+
+    print("printing df")
+    print(df)
+
+    df.rename(columns={
+            "FECHA OPERACIÓN": "Date",
+            "CONCEPTO": "Name",
+            "IMPORTE EUR": "Amount",
+        },
+        inplace = True,
+        )
+
+    # change the amount to charges
+    df["Amount"] *= -1
+
+    # filters out payments
+    df = df[df["Amount"] > 0]
+
+    # makes blank "Category"
+    df["Category"] = ""
+
+    # Makes "Unit" column
+    df["Unit"] = "EUR"
+
+    # reoder columns
+    df = df[["Date", "Name", "Category", "Amount", "Unit"]]
+
+    return df
+
 
 def parse_bofa(filename: str) -> pd.DataFrame:
     """
@@ -79,11 +144,12 @@ def main():
             )
 
     args = parser.parse_args()
+    print(args)
 
     if args.type == "bofa":
         output = parse_bofa(args.file)
-    elif args.type == "santader":
-        output = parse_bofa(args.file)
+    elif args.type == "santander":
+        output = parse_santader_es(args.file)
     else:
         output = pd.DataFrame()
 
