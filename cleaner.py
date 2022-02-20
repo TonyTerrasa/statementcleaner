@@ -1,6 +1,9 @@
 import argparse
 import pandas as pd
+import numpy as np
 from subprocess import run
+
+from pandas.core.frame import DataFrame
 
 
 def convert_to_csv(filename: str) -> str:
@@ -18,7 +21,66 @@ def convert_to_csv(filename: str) -> str:
     return new_filename
 
 def parse_purchase_log(filename: str) -> pd.DataFrame:
-    return pd.DataFrame()
+    """
+    Reads statement from the the format of purchase log that I 
+    use on my computer. It generally follows the format:
+    - DATE,AMOUNT($/€),cardoption,description
+
+    However, it will not have any headers
+
+    Function adds headers, and fills the appropriate columns
+    and returns pandas dataframe
+
+    [Remove the '-' character]
+    col1                 -> Date 
+    [Detect number] col2 -> Amount
+    [Detect €/$] col2    -> Unit
+    [Remove the card option col3]
+    [Add] Category       -> "" for all 
+    col4                 -> Name
+
+
+    Order: Date,Name,Catagory,Amount,Unit
+    """
+    assert ".csv" in filename, "csv is the only supported file time for the purchase log"
+
+
+    df = pd.read_csv(filename, header=6)
+
+    # remove the Source column
+    df.drop(["Source"], inplace=True, axis=1)
+
+
+    # remove the "-" by taking out the first character or each entry
+    df["Date"] = df["Date"].apply(lambda x: x[1:].strip() if x[0]=="-" else x.strip(), convert_dtype=True)
+
+    # compute the Unit column by looking at the last character of the Amount column
+    df["Unit"] = df["Amount"].apply(lambda x:x[-1] if not x[-1].isdigit() else "")
+    df["Unit"] = df["Unit"].map({"€":"EUR","$":"USD","":""})
+
+    # remove currency signs from the Amount column
+    df["Amount"] = df["Amount"].apply(lambda x:x[:-1] if not x[-1].isdigit() else x, convert_dtype=True)
+
+    # remove preceding or trailing spaces from the entries in Description
+    df["Description"] = df["Description"].apply(lambda x:str(x).strip())
+    # change the name of the Description column
+    df.rename(columns={
+            "Description": "Name",
+        },
+        inplace = True,
+        )
+
+
+
+    # makes blank "Category"
+    df["Category"] = ""
+
+    # reoder columns and return everything except the "Source" Column
+    df = df[["Date", "Name", "Category", "Amount", "Unit"]]
+
+    print(df)
+
+    return df
 
 
 def parse_santader_es(filename: str) -> pd.DataFrame:
