@@ -45,7 +45,12 @@ def parse_purchase_log(filename: str) -> pd.DataFrame:
     assert ".csv" in filename, "csv is the only supported file time for the purchase log"
 
 
-    df = pd.read_csv(filename, header=6)
+    df = pd.read_csv(filename)
+
+    # trim any leading or trailing spaces 
+    names_stripped = {col_name:col_name.strip() for col_name in df.columns}
+
+    df.rename(columns=names_stripped, inplace=True)
 
     # remove the Source column
     df.drop(["Source"], inplace=True, axis=1)
