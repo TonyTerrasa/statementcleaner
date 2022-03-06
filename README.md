@@ -5,15 +5,16 @@ The two banks I'm currently using and Bank of America and Santander (Spain). Thi
 
 # Usage
 ```
-usage: cleaner.py [-h] -file FILE [-output OUTPUT] [-type {bofa,santander}]
+usage: cleaner.py [-h] -f FILE [-o OUTPUT] [-b] [-s] [-p]
 
-optional arguments:
+options:
   -h, --help            show this help message and exit
-  -file FILE, -f FILE   location of the input file
-  -output OUTPUT, -o OUTPUT
+  -f FILE, --file FILE  location of the input file
+  -o OUTPUT, --output OUTPUT
                         location of the output file
-  -type {bofa,santander}, -t {bofa,santander}
-                        type of bankstatement
+  -b, --bofa            bankstatement is type bank of america
+  -s, --santander       bankstatement is type Santander
+  -p, --purchase-log    bankstatement is type from purchase log format
 ```
 
 # Specifications 
@@ -60,6 +61,17 @@ IMPORTE EUR --> Amount [convert to positive]
 
 Finally, remove any deposits from the record
 
+
+## Purchase Log 
+Reads the purchase log format that I use. It has the following column transformations
+```
+Date -> Date 
+Amount -> Amount 
+Source -> [Delete]
+[Add] Category -> "" for all 
+[Add] Unit -> "EUR" for all 
+Description -> Name
+```
 
 # Dependencies
 Made and tested with `Python 3.9.7`
