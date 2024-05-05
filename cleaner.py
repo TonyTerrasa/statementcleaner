@@ -27,9 +27,9 @@ def parse_purchase_log(filename: str) -> pd.DataFrame:
 
     Order: Date,Name,Catagory,Amount,Unit
     """
-    assert (
-        ".csv" in filename
-    ), "csv is the only supported file time for the purchase log"
+    if not filename.endswith(".csv"):
+        raise ValueError("Only CSV files are supported. Please check the file type of:", filename)
+
 
     df = pd.read_csv(filename)
 
@@ -200,7 +200,7 @@ def main():
     parser.add_argument(
         "--output",
         help="Output file (optional)",
-        default=f"purchas_log_{date_string}.csv",
+        default=f"purchase_log_{date_string}.csv",
     )
 
     args = parser.parse_args()
