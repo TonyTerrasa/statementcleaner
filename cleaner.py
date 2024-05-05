@@ -1,23 +1,9 @@
 import argparse
 import pandas as pd
-import numpy as np
-from subprocess import run
-
-from pandas.core.frame import DataFrame
+import datetime
 
 
-def convert_to_csv(filename: str) -> str:
-    # create new filename by taking the whole filename
-    # except for the extension and changing the extension
-    # to csv
-    new_filename = filename.split(".")[:-1] + [".csv"]
-    new_filename = "".join(new_filename)
-
-    # use subprocess to convert file
-    run(f"ssconvert {filename} {new_filename}")
-
-    # return new file name
-    return new_filename
+output_columns = ["Date", "Name", "Category", "Amount", "Source"]
 
 
 def parse_purchase_log(filename: str) -> pd.DataFrame:
@@ -33,10 +19,9 @@ def parse_purchase_log(filename: str) -> pd.DataFrame:
 
     [Remove the '-' character]
     col1                 -> Date
-    [Detect number] col2 -> Amount
-    [Detect €/$] col2    -> Unit
-    [Remove the card option col3]
+    col2                -> Amount
     [Add] Category       -> "" for all
+    [Add] Source       -> "BA Checking" for all
     col4                 -> Name
 
 
@@ -54,20 +39,11 @@ def parse_purchase_log(filename: str) -> pd.DataFrame:
     df.rename(columns=names_stripped, inplace=True)
 
     # remove the Source column
-    df.drop(["Source"], inplace=True, axis=1)
+    # df.drop(["Source"], inplace=True, axis=1)
 
     # remove the "-" by taking out the first character or each entry
     df["Date"] = df["Date"].apply(
         lambda x: x[1:].strip() if x[0] == "-" else x.strip(), convert_dtype=True
-    )
-
-    # compute the Unit column by looking at the last character of the Amount column
-    df["Unit"] = df["Amount"].apply(lambda x: x[-1] if not x[-1].isdigit() else "")
-    df["Unit"] = df["Unit"].map({"€": "EUR", "$": "USD", "": ""})
-
-    # remove currency signs from the Amount column
-    df["Amount"] = df["Amount"].apply(
-        lambda x: x[:-1] if not x[-1].isdigit() else x, convert_dtype=True
     )
 
     # remove preceding or trailing spaces from the entries in Description
@@ -83,44 +59,43 @@ def parse_purchase_log(filename: str) -> pd.DataFrame:
     # makes blank "Category"
     df["Category"] = ""
 
+    # Makes "Source" column
+    df["Source"] = "BA Checking"
+
     # reoder columns and return everything except the "Source" Column
-    df = df[["Date", "Name", "Category", "Amount", "Unit"]]
+    df = df[output_columns]
 
     print(df)
 
     return df
 
 
-def parse_santader_es(filename: str) -> pd.DataFrame:
+def parse_usaa(filename: str) -> pd.DataFrame:
     """
-    Reads statement from the Spanish version of the Santander web
-    page exported as "Exportar Excel"
+    Reads statement from USAA web page hitting "Export"
     Output columns of this format are:
-    FECHA OPERACIÓN,CONCEPTO,IMPORTE EUR
+    Date,Description,Original Description,Category,Amount,Status
     Function performs the following transformation of header names
     and returns pandas dataframe
-    FECHA OPERACIÓN -> Date
-    CONCEPTO -> Name
+
+    Date -> [Same]
+    Description -> Name
+    Original Description -> [Delete]
+    Category -> [Delete]
+    Status -> [Delete]
+
     [Add] Category -> "" for all
-    [Add] Unit -> "Euro" for all
-    IMPORTE EUR --> Amount [Convert to positive}
-    Finally, remove any deposits from the record
+    [Add] Unit -> "USD" for all
+    Amount -> [Same]
+
     """
-    if ".csv" not in filename:
-        filename = convert_to_csv(filename)
 
-    # 7 lines until the headers of the table in this
-    # file type
-    df = pd.read_csv(filename, header=7)
+    df = pd.read_csv(filename)
 
-    print("printing df")
-    print(df)
-
+    df.drop(["Original Description", "Category", "Status"], inplace=True, axis=1)
     df.rename(
         columns={
-            "FECHA OPERACIÓN": "Date",
-            "CONCEPTO": "Name",
-            "IMPORTE EUR": "Amount",
+            "Description": "Name",
         },
         inplace=True,
     )
@@ -128,17 +103,19 @@ def parse_santader_es(filename: str) -> pd.DataFrame:
     # change the amount to charges
     df["Amount"] *= -1
 
-    # filters out payments
+    # filters out money put INTO the account
+    # also take out transfers (not purchases)
     df = df[df["Amount"] > 0]
+    df = df[df["Name"] != "USAA Transfer"]
 
     # makes blank "Category"
     df["Category"] = ""
 
-    # Makes "Unit" column
-    df["Unit"] = "EUR"
+    # Makes "Source" column
+    df["Source"] = "USAA"
 
     # reoder columns
-    df = df[["Date", "Name", "Category", "Amount", "Unit"]]
+    df = df[output_columns]
 
     return df
 
@@ -158,7 +135,7 @@ def parse_bofa(filename: str) -> pd.DataFrame:
     [Add] Category -> "" for all
     [Add] Unit -> "USD" for all
     Amount -> [Same]
-    Finally, any Entries that say "PAYMENT - THANK YOU"
+    Finally, remove any Entries that say "PAYMENT - THANK YOU"
     """
 
     df = pd.read_csv(filename)
@@ -181,75 +158,71 @@ def parse_bofa(filename: str) -> pd.DataFrame:
     # makes blank "Category"
     df["Category"] = ""
 
-    # Makes "Unit" column
-    df["Unit"] = "USD"
+    # Makes "Source" column
+    df["Source"] = "BofA"
 
     # reoder columns
-    df = df[["Date", "Name", "Category", "Amount", "Unit"]]
+    df = df[output_columns]
 
     return df
 
 
+def detect_file_source(filename: str) -> str:
+    """Checks a file to see where it came from options are:
+    usaa
+    bofa
+    log
+    unrecognized
+    """
+
+    with open(filename, "r") as file:
+        first_line = file.readline().strip()
+
+    if first_line == "Date,Description,Original Description,Category,Amount,Status":
+        return "usaa"
+    elif first_line == "Posted Date,Reference Number,Payee,Address,Amount":
+        return "bofa"
+    elif first_line == "Date,Amount,Description":
+        return "log"
+    else:
+        return "unrecognized"
+
+
 def main():
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument(
-        "-f",
-        "--file",
-        required=True,
-        type=str,
-        help="location of the input file",
+    parser = argparse.ArgumentParser(
+        description="convert a set of bank statements into the same csv format"
     )
 
+    # using nargs will allow argparse to check automatically that at lease one file has been input
+    parser.add_argument("input_files", nargs="+", help="List of input files to process")
+    # Output file - optional, specified with a flag
+    date_string = datetime.date.today().strftime("%Y%m%d")
     parser.add_argument(
-        "-o",
         "--output",
-        type=str,
-        default="out.csv",
-        help="location of the output file",
-    )
-
-    parser.add_argument(
-        "-b",
-        "--bofa",
-        # type = bool,
-        default=False,
-        help="bankstatement is type bank of america",
-        action="store_true",
-    )
-    parser.add_argument(
-        "-s",
-        "--santander",
-        # type = bool,
-        default=False,
-        help="bankstatement is type Santander",
-        action="store_true",
-    )
-    parser.add_argument(
-        "-p",
-        "--purchase-log",
-        # type = bool,
-        default=False,
-        help="bankstatement is type from purchase log format",
-        action="store_true",
+        help="Output file (optional)",
+        default=f"purchas_log_{date_string}.csv",
     )
 
     args = parser.parse_args()
 
-    assert (
-        sum((args.bofa, args.santander, args.purchase_log)) == 1
-    ), "You must give exactly one option for the file type"
+    # loop over input files and generate data frames from each one
+    outputs = []
+    for filename in args.input_files:
+        file_source = detect_file_source(filename)
+        if file_source == "usaa":
+            outputs.append(parse_usaa(filename))
+        elif file_source == "bofa":
+            outputs.append(parse_bofa(filename))
+        elif file_source == "log":
+            outputs.append(parse_purchase_log(filename))
+        else:
+            raise ValueError(f"File '{filename}' is of an unrecognized log type.")
 
-    if args.bofa:
-        output = parse_bofa(args.file)
-    elif args.santander:
-        output = parse_santader_es(args.file)
-    elif args.purchase_log:
-        output = parse_purchase_log(args.file)
-    else:
-        output = pd.DataFrame()
-
-    output.to_csv(args.output)
+    # make the final file and output to csv
+    result = pd.concat(outputs, ignore_index=True)
+    result = result.sort_values(by="Date", ignore_index=True, ascending=True)
+    result["Name"] = result["Name"].str.lower()
+    result.to_csv(args.output, index=False)
 
     print(f"successfully written to ouput file {args.output}")
 
