@@ -28,8 +28,9 @@ def parse_purchase_log(filename: str) -> pd.DataFrame:
     Order: Date,Name,Catagory,Amount,Unit
     """
     if not filename.endswith(".csv"):
-        raise ValueError("Only CSV files are supported. Please check the file type of:", filename)
-
+        raise ValueError(
+            "Only CSV files are supported. Please check the file type of:", filename
+        )
 
     df = pd.read_csv(filename)
 
