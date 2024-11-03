@@ -200,6 +200,7 @@ def main():
     date_string = datetime.date.today().strftime("%Y%m%d")
     parser.add_argument(
         "--output",
+        "-o",
         help="Output file (optional)",
         default=f"purchase_log_{date_string}.csv",
     )
